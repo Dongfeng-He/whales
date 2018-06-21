@@ -128,6 +128,7 @@ def train_model(X_train, y_train, opt, BATCH_SIZE = 16, EPOCHS = 30, RANDOM_STAT
         callbacks = get_callbacks(filepath='/output/model_weight_SGD.hdf5', patience=6)
         gmodel = get_model(opt)
         gmodel.load_weights(filepath='/output/model_weight_Adam.hdf5')
+    x_train = X_train
     """
     x_train, x_valid, y_train, y_valid = train_test_split(
         X_train,
