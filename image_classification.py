@@ -86,15 +86,15 @@ def get_model(opt='sgd'):
     conv4 = conv_layer(conv3, 128, zp_flag=False)
     mp2 = MaxPooling2D(pool_size=(3, 3), strides=(2, 2))(conv4)
     # 9
-    '''''
+
     conv7 = conv_layer(mp2, 256, zp_flag=False)
     conv8 = conv_layer(conv7, 256, zp_flag=False)
     conv9 = conv_layer(conv8, 256, zp_flag=False)
     mp3 = MaxPooling2D(pool_size=(3, 3), strides=(2, 2))(conv9)
-    '''
+
     # 1
     # dense layers
-    flt = Flatten()(mp2)
+    flt = Flatten()(mp3)
     ds1 = dense_set(flt, 128, activation='sigmoid')
     out = dense_set(ds1, CLASS_NUM, activation='softmax')
 
@@ -128,6 +128,7 @@ def train_model(X_train, y_train, opt, BATCH_SIZE = 16, EPOCHS = 30, RANDOM_STAT
         callbacks = get_callbacks(filepath='/output/model_weight_SGD.hdf5', patience=6)
         gmodel = get_model(opt)
         gmodel.load_weights(filepath='/output/model_weight_Adam.hdf5')
+    """
     x_train, x_valid, y_train, y_valid = train_test_split(
         X_train,
         y_train,
@@ -135,8 +136,9 @@ def train_model(X_train, y_train, opt, BATCH_SIZE = 16, EPOCHS = 30, RANDOM_STAT
         train_size=0.95,
         random_state=RANDOM_STATE
     )
+    """
     gen = ImageDataGenerator(
-        rotation_range=360.,
+        rotation_range=40.,
         width_shift_range=0.3,
         height_shift_range=0.3,
         zoom_range=0.3,
@@ -148,9 +150,8 @@ def train_model(X_train, y_train, opt, BATCH_SIZE = 16, EPOCHS = 30, RANDOM_STAT
                          epochs=EPOCHS,
                          verbose=1,
                          shuffle=True,
-                         validation_data=(x_valid, y_valid),
                          callbacks=callbacks)
-
+    # validation_data=(x_valid, y_valid),
 
 def test_model(X_test, img_name):
     gmodel = get_model()
@@ -280,8 +281,8 @@ def main():
     elif operation == 'both':
         X_train = np.array(train_dict['image'])
         y_train = to_categorical(np.array([CLASS[l] for l in train_dict['label']]))
-        train_model(X_train, y_train, 'adam', EPOCHS=1)
-        train_model(X_train, y_train, 'sgd', EPOCHS=1)
+        #train_model(X_train, y_train, 'adam', EPOCHS=50)
+        train_model(X_train, y_train, 'sgd', EPOCHS=80)
         X_test = np.array(test_dict['image'])
         img_name = test_dict['name']
         test_model(X_test, img_name)
