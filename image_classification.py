@@ -281,8 +281,8 @@ def main():
     elif operation == 'both':
         X_train = np.array(train_dict['image'])
         y_train = to_categorical(np.array([CLASS[l] for l in train_dict['label']]))
-        #train_model(X_train, y_train, 'adam', EPOCHS=50)
-        train_model(X_train, y_train, 'sgd', EPOCHS=80)
+        train_model(X_train, y_train, 'adam', EPOCHS=30)
+        train_model(X_train, y_train, 'sgd', EPOCHS=50)
         X_test = np.array(test_dict['image'])
         img_name = test_dict['name']
         test_model(X_test, img_name)
