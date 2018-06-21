@@ -39,6 +39,7 @@ train_data_dropped = train_data.drop_duplicates(['Id'])
 train_data_dropped = train_data_dropped.reset_index(drop = True)
 id_series = train_data_dropped['Id']
 class_label = pd.DataFrame({'class': id_series.index, 'label':id_series.values})
+CLASS_NUM = len(class_label)
 CLASS = class_label.set_index('label').T.to_dict(orient = 'records')[0]
 INV_CLASS = class_label.set_index('class').T.to_dict(orient = 'records')[0]
 for i in range(len(train_data)):
@@ -56,14 +57,19 @@ def dense_set(inp_layer, n, activation, drop_rate=0.):
 
 
 # Conv. layers set
-def conv_layer(feature_batch, feature_map, kernel_size=(3, 3), strides=(1, 1), zp_flag=False):
+def conv_layer(feature_batch, feature_map, kernel_size=(3, 3), strides=(1, 1), activation='sigmoid', zp_flag=False):
     if zp_flag:
         zp = ZeroPadding2D((1, 1))(feature_batch)
     else:
         zp = feature_batch
     conv = Conv2D(filters=feature_map, kernel_size=kernel_size, strides=strides)(zp)
     bn = BatchNormalization(axis=3)(conv)
-    act = LeakyReLU(1 / 10)(bn)
+    if activation == 'leakyRL':
+        act = LeakyReLU(1 / 10)(bn)
+    elif activation == 'sigmoid':
+        act = Activation(activation='sigmoid')(bn)
+    elif activation == 'tanh':
+        act = Activation(activation='tanh')(bn)
     return act
 
 
@@ -72,7 +78,7 @@ def get_model(opt='sgd'):
     inp_img = Input(shape=(51, 51, 3))
 
     # 51
-    conv1 = conv_layer(inp_img, 64, zp_flag=False)
+    conv1 = conv_layer(inp_img, 64, activation='leakyRL', zp_flag=False)
     conv2 = conv_layer(conv1, 64, zp_flag=False)
     mp1 = MaxPooling2D(pool_size=(3, 3), strides=(2, 2))(conv2)
     # 23
@@ -80,15 +86,17 @@ def get_model(opt='sgd'):
     conv4 = conv_layer(conv3, 128, zp_flag=False)
     mp2 = MaxPooling2D(pool_size=(3, 3), strides=(2, 2))(conv4)
     # 9
+    '''''
     conv7 = conv_layer(mp2, 256, zp_flag=False)
     conv8 = conv_layer(conv7, 256, zp_flag=False)
     conv9 = conv_layer(conv8, 256, zp_flag=False)
     mp3 = MaxPooling2D(pool_size=(3, 3), strides=(2, 2))(conv9)
+    '''
     # 1
     # dense layers
-    flt = Flatten()(mp3)
-    ds1 = dense_set(flt, 128, activation='tanh')
-    out = dense_set(ds1, 4251, activation='softmax')
+    flt = Flatten()(mp2)
+    ds1 = dense_set(flt, 128, activation='sigmoid')
+    out = dense_set(ds1, CLASS_NUM, activation='softmax')
 
     model = Model(inputs=inp_img, outputs=out)
 
@@ -148,9 +156,31 @@ def test_model(X_test, img_name):
     gmodel = get_model()
     gmodel.load_weights(filepath='model_weight_SGD.hdf5')
     prob = gmodel.predict(X_test, verbose=1)
-    pred = prob.argmax(axis=-1)
+    pred = []
+    for p in prob:
+        prob_df = pd.DataFrame({'Prob': p})
+        top_prob = prob_df.sort_values(by='Prob', ascending=False)[0:5]
+        sum = 0
+        for i in range(5):
+            sum += top_prob.iloc[i]['Prob']
+        percent_prob = top_prob
+        for i in range(5):
+            percent_prob.iloc[i]['Prob'] = top_prob.iloc[i]['Prob'] / sum
+        index = percent_prob.index
+        pred.append(index)
+    operation = 'all'
+    if operation == 'all':
+        id_list = []
+        for p in pred:
+            str = ''
+            for i in range(5):
+                str = str + ' ' + INV_CLASS[p[i]]
+            id_list.append(str)
+        #id_list = [[INV_CLASS[p[i]] for i in range(5)] for p in pred]
+    elif operation == 'one':
+        pred = prob.argmax(axis=-1)
     sub = pd.DataFrame({"Image": img_name,
-                        "Id": [INV_CLASS[p] for p in pred]})
+                        "Id": id_list})
     sub.to_csv("submission.csv", index=False, header=True)
 
 
@@ -202,7 +232,7 @@ def reader():
     train_path = []
     test_path = []
 
-    for root, dirs, files in os.walk('/input'):
+    for root, dirs, files in os.walk('/input'):  #'input' for computer, '/input' for floydhub
         if dirs != []:
             print('Root:\n' + str(root))
             print('Dirs:\n' + str(dirs))
@@ -237,7 +267,7 @@ def reader():
 # I commented out some of the code for learning the model.
 def main():
     train_dict, test_dict = reader()
-    operation = 'both'
+    operation = 'test'
     if operation == 'train':
         X_train = np.array(train_dict['image'])
         y_train = to_categorical(np.array([CLASS[l] for l in train_dict['label']]))
