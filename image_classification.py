@@ -267,7 +267,7 @@ def reader():
 # I commented out some of the code for learning the model.
 def main():
     train_dict, test_dict = reader()
-    operation = 'test'
+    operation = 'both'
     if operation == 'train':
         X_train = np.array(train_dict['image'])
         y_train = to_categorical(np.array([CLASS[l] for l in train_dict['label']]))
