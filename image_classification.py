@@ -202,7 +202,7 @@ def reader():
     train_path = []
     test_path = []
 
-    for root, dirs, files in os.walk('input'):
+    for root, dirs, files in os.walk('/input'):
         if dirs != []:
             print('Root:\n' + str(root))
             print('Dirs:\n' + str(dirs))
