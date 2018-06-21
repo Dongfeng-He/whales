@@ -122,10 +122,10 @@ def get_callbacks(filepath, patience=5):
 # I trained model about 12h on GTX 950.
 def train_model(X_train, y_train, opt, BATCH_SIZE = 16, EPOCHS = 30, RANDOM_STATE = 11):
     if opt == 'adam':
-        callbacks = get_callbacks(filepath='model_weight_Adam.hdf5', patience=6)
+        callbacks = get_callbacks(filepath='/output/model_weight_Adam.hdf5', patience=6)
         gmodel = get_model(opt)
     elif opt == 'sgd':
-        callbacks = get_callbacks(filepath='model_weight_SGD.hdf5', patience=6)
+        callbacks = get_callbacks(filepath='/output/model_weight_SGD.hdf5', patience=6)
         gmodel = get_model(opt)
         gmodel.load_weights(filepath='model_weight_Adam.hdf5')
     x_train, x_valid, y_train, y_valid = train_test_split(
@@ -154,7 +154,7 @@ def train_model(X_train, y_train, opt, BATCH_SIZE = 16, EPOCHS = 30, RANDOM_STAT
 
 def test_model(X_test, img_name):
     gmodel = get_model()
-    gmodel.load_weights(filepath='model_weight_SGD.hdf5')
+    gmodel.load_weights(filepath='/output/model_weight_SGD.hdf5')
     prob = gmodel.predict(X_test, verbose=1)
     pred = []
     for p in prob:
@@ -181,7 +181,7 @@ def test_model(X_test, img_name):
         pred = prob.argmax(axis=-1)
     sub = pd.DataFrame({"Image": img_name,
                         "Id": id_list})
-    sub.to_csv("submission.csv", index=False, header=True)
+    sub.to_csv("/output/submission.csv", index=False, header=True)
 
 
 # Resize all image to 51x51
