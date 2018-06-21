@@ -127,12 +127,12 @@ def train_model(X_train, y_train, opt, BATCH_SIZE = 16, EPOCHS = 30, RANDOM_STAT
     elif opt == 'sgd':
         callbacks = get_callbacks(filepath='/output/model_weight_SGD.hdf5', patience=6)
         gmodel = get_model(opt)
-        gmodel.load_weights(filepath='model_weight_Adam.hdf5')
+        gmodel.load_weights(filepath='/output/model_weight_Adam.hdf5')
     x_train, x_valid, y_train, y_valid = train_test_split(
         X_train,
         y_train,
         shuffle=True,
-        train_size=0.8,
+        train_size=0.95,
         random_state=RANDOM_STATE
     )
     gen = ImageDataGenerator(
@@ -280,8 +280,8 @@ def main():
     elif operation == 'both':
         X_train = np.array(train_dict['image'])
         y_train = to_categorical(np.array([CLASS[l] for l in train_dict['label']]))
-        train_model(X_train, y_train, 'adam', EPOCHS=50)
-        train_model(X_train, y_train, 'sgd', EPOCHS=30)
+        train_model(X_train, y_train, 'adam', EPOCHS=1)
+        train_model(X_train, y_train, 'sgd', EPOCHS=1)
         X_test = np.array(test_dict['image'])
         img_name = test_dict['name']
         test_model(X_test, img_name)
