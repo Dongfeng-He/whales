@@ -88,7 +88,7 @@ def get_model(opt='sgd'):
     # dense layers
     flt = Flatten()(mp3)
     ds1 = dense_set(flt, 128, activation='tanh')
-    out = dense_set(ds1, 485, activation='softmax')
+    out = dense_set(ds1, 4251, activation='softmax')
 
     model = Model(inputs=inp_img, outputs=out)
 
