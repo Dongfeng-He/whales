@@ -2,7 +2,7 @@ import pandas as pd
 import numpy as np
 import os
 #import imageio
-
+import matplotlib.pyplot as plt
 from keras.utils import plot_model
 from keras.models import Model
 from keras.layers import Input
@@ -27,6 +27,11 @@ from skimage.transform import resize as imresize
 from skimage import io
 import matplotlib.image as mpimg
 from tqdm import tqdm
+from keras.preprocessing.image import (
+    random_rotation, random_shift, random_shear, random_zoom,
+    random_channel_shift, img_to_array, array_to_img)
+from math import ceil
+from PIL import Image
 
 from subprocess import check_output
 
@@ -39,12 +44,13 @@ train_data_dropped = train_data.drop_duplicates(['Id'])
 train_data_dropped = train_data_dropped.reset_index(drop = True)
 id_series = train_data_dropped['Id']
 class_label = pd.DataFrame({'class': id_series.index, 'label':id_series.values})
-CLASS_NUM = len(class_label)
+TOTAL_CLASS_NUM = len(class_label)
 CLASS = class_label.set_index('label').T.to_dict(orient = 'records')[0]
 INV_CLASS = class_label.set_index('class').T.to_dict(orient = 'records')[0]
 for i in range(len(train_data)):
     label = train_data.loc[i, 'Id']
     train_data.loc[i, 'class'] = CLASS[label]
+CLASS_NUM = train_data['class'].value_counts().to_dict()
 
 
 # Dense layers set
@@ -75,7 +81,7 @@ def conv_layer(feature_batch, feature_map, kernel_size=(3, 3), strides=(1, 1), a
 
 # simple model
 def get_model(opt='sgd'):
-    inp_img = Input(shape=(51, 51, 3))
+    inp_img = Input(shape=(256, 256, 3))
 
     # 51
     conv1 = conv_layer(inp_img, 64, activation='leakyRL', zp_flag=False)
@@ -96,7 +102,7 @@ def get_model(opt='sgd'):
     # dense layers
     flt = Flatten()(mp3)
     ds1 = dense_set(flt, 128, activation='sigmoid')
-    out = dense_set(ds1, CLASS_NUM, activation='softmax')
+    out = dense_set(ds1, TOTAL_CLASS_NUM, activation='softmax')
 
     model = Model(inputs=inp_img, outputs=out)
 
@@ -120,43 +126,79 @@ def get_callbacks(filepath, patience=5):
 
 
 # I trained model about 12h on GTX 950.
-def train_model(X_train, y_train, opt, BATCH_SIZE = 16, EPOCHS = 30, RANDOM_STATE = 11):
+def train_model(X_train, y_train, opt, BATCH_SIZE = 16, EPOCHS = 30, RANDOM_STATE = 11, valid=True):
     if opt == 'adam':
         callbacks = get_callbacks(filepath='/output/model_weight_Adam.hdf5', patience=6)
         gmodel = get_model(opt)
     elif opt == 'sgd':
         callbacks = get_callbacks(filepath='/output/model_weight_SGD.hdf5', patience=6)
         gmodel = get_model(opt)
-        gmodel.load_weights(filepath='/output/model_weight_Adam.hdf5')
-    x_train = X_train
-    """
-    x_train, x_valid, y_train, y_valid = train_test_split(
-        X_train,
-        y_train,
-        shuffle=True,
-        train_size=0.95,
-        random_state=RANDOM_STATE
-    )
+        #gmodel.load_weights(filepath='/output/model_weight_Adam.hdf5')
+    if valid == True:
+        x_train, x_valid, y_train, y_valid = train_test_split(
+            X_train,
+            y_train,
+            shuffle=True,
+            train_size=0.8,
+            random_state=RANDOM_STATE
+        )
+    gmodel.fit(x_train,
+               y_train,
+               batch_size=BATCH_SIZE,
+               epochs=EPOCHS,
+               verbose=1,
+               validation_data=(x_valid, y_valid),
+               shuffle=True,
+               callbacks=callbacks)
+
     """
     gen = ImageDataGenerator(
-        rotation_range=40.,
-        width_shift_range=0.3,
+        rotation_range=30,
+        width_shift_range=0.1,
         height_shift_range=0.3,
         zoom_range=0.3,
         horizontal_flip=True,
         vertical_flip=True
     )
-    gmodel.fit_generator(gen.flow(x_train, y_train, batch_size=BATCH_SIZE),
-                         steps_per_epoch=10 * len(x_train) / BATCH_SIZE,
-                         epochs=EPOCHS,
-                         verbose=1,
-                         shuffle=True,
-                         callbacks=callbacks)
-    # validation_data=(x_valid, y_valid),
+    if valid == True:
+        x_train, x_valid, y_train, y_valid = train_test_split(
+            X_train,
+            y_train,
+            shuffle=True,
+            train_size=0.67,
+            random_state=RANDOM_STATE
+        )
+        num_label = x_train
+        gmodel.fit_generator(gen.flow(x_train, y_train, batch_size=BATCH_SIZE),
+                             steps_per_epoch=10 * len(x_train) / BATCH_SIZE,
+                             epochs=EPOCHS,
+                             verbose=1,
+                             validation_data=(x_valid, y_valid),
+                             shuffle=True,
+                             callbacks=callbacks)
+    else:
+        x_train = X_train
+        gmodel.fit_generator(gen.flow(x_train, y_train, batch_size=BATCH_SIZE),
+                             steps_per_epoch=10 * len(x_train) / BATCH_SIZE,
+                             epochs=EPOCHS,
+                             verbose=1,
+                             shuffle=True,
+                             callbacks=callbacks)
+    #gmodel.save_weights('/output/final_weight.hdf5')
+    """
+    return gmodel
 
-def test_model(X_test, img_name):
-    gmodel = get_model()
-    gmodel.load_weights(filepath='/output/model_weight_SGD.hdf5')
+
+def test_model(X_test, img_name, my_model=None, opt='sgd'):
+    if my_model == None:
+        if opt == 'sgd':
+            gmodel = get_model(opt)
+            gmodel.load_weights(filepath='/output/model_weight_SGD.hdf5')
+        elif opt == 'adam':
+            gmodel = get_model(opt)
+            gmodel.load_weights(filepath='/output/model_weight_Adam.hdf5')
+    else:
+        gmodel = my_model
     prob = gmodel.predict(X_test, verbose=1)
     pred = []
     for p in prob:
@@ -186,9 +228,21 @@ def test_model(X_test, img_name):
     sub.to_csv("/output/submission.csv", index=False, header=True)
 
 
+def plot_images(imgs, labels, rows=4):
+    # Set figure to 13 inches x 8 inches
+    figure = plt.figure(figsize=(13, 8))
+    cols = len(imgs) // rows + 1
+    for i in range(len(imgs)):
+        subplot = figure.add_subplot(rows, cols, i + 1)
+        subplot.axis('Off')
+        if labels:
+            subplot.set_title(labels[i], fontsize=16)
+        plt.imshow(imgs[i], cmap='gray')
+
+
 # Resize all image to 51x51
 def img_reshape(img):
-    img = imresize(img, (51, 51, 3))
+    img = imresize(img, (256, 256, 3))
     return img
 
 
@@ -198,11 +252,26 @@ def img_label(path):
     label = train_data[(train_data.Image==image_name)]['Id'].values[0]
     return label
 
+
 # get plant class on image
 def img_class(path):
     image_name = str(str(path.split('/')[-1]))
     class_num = train_data[(train_data.Image == image_name)]['class'].values[0]
     return class_num
+
+
+def img_augmentation(img, num):
+    img_arr_origin = img_to_array(img)
+    img_list = []
+    for i in range(num):
+        img_arr = random_rotation(img_arr_origin, 40, row_axis=0, col_axis=1, channel_axis=2, fill_mode='nearest')
+        img_arr = random_shear(img_arr, intensity=0.4, row_axis=0, col_axis=1, channel_axis=2, fill_mode='nearest')
+        img_arr = random_zoom(img_arr, zoom_range=(0.9, 1.2), row_axis=0, col_axis=1, channel_axis=2, fill_mode='nearest')
+        img = array_to_img(img_arr)
+        img = np.array(img)
+        img_list.append(img)
+        #img_arr = random_greyscale(img_arr, 0.4)
+    return img_list
 
 
 # fill train and test dict
@@ -212,19 +281,26 @@ def fill_dict(paths, some_dict):
         text = 'Start fill train_dict'
     elif 'test' in paths[0]:
         text = 'Start fill test_dict'
-
+    img_num_per_class = 12
     for p in tqdm(paths, ascii=True, ncols=85, desc=text):
-        #img = imageio.imread(p)
         img = io.imread(p)
-        img = img_reshape(img)
-        some_dict['image'].append(img)
         if 'train' in paths[0]:
-            some_dict['label'].append(img_label(p))
-            some_dict['class'].append(img_class(p))
+            the_class = img_class(p)
+            class_num = CLASS_NUM[the_class]
+            img2 = Image.open(p)
+            aug_img_list = img_augmentation(img2, ceil(1.0 * img_num_per_class / class_num))
+            for i in range(len(aug_img_list)+1):
+                if i == len(aug_img_list):
+                    some_dict['image'].append(img_reshape(img))
+                else:
+                    some_dict['image'].append(img_reshape(aug_img_list[i]))
+                some_dict['label'].append(img_label(p))
+                some_dict['class'].append(img_class(p))
         elif 'test' in paths[0]:
+            img = img_reshape(img)
+            some_dict['image'].append(img)
             image_name = str(str(p.split('/')[-1]))
             some_dict['name'].append(image_name)
-
     return some_dict
 
 
@@ -282,11 +358,11 @@ def main():
     elif operation == 'both':
         X_train = np.array(train_dict['image'])
         y_train = to_categorical(np.array([CLASS[l] for l in train_dict['label']]))
-        train_model(X_train, y_train, 'adam', EPOCHS=30)
-        train_model(X_train, y_train, 'sgd', EPOCHS=50)
+        my_model = train_model(X_train, y_train, 'adam', EPOCHS=20)
+        #train_model(X_train, y_train, 'sgd', EPOCHS=20)
         X_test = np.array(test_dict['image'])
         img_name = test_dict['name']
-        test_model(X_test, img_name)
+        test_model(X_test, img_name, my_model=my_model)
 
 
 
